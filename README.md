@@ -15,7 +15,6 @@ Imported through *Configuration → Templates → Import* in the Zabbix UI.
 | Template | Monitors | Method |
 |----------|----------|--------|
 | [proxmox-backup-server](templates/proxmox-backup-server) | PBS datastores, backup jobs, verify, GC, service health | HTTP agent (PBS API) |
-#| [longhorn-backup](templates/longhorn-backup) | Longhorn backup targets, snapshots, job health | HTTP agent (Longhorn API) |
 | [wazuh](templates/wazuh) | Wazuh manager, agent counts, indexer cluster health | HTTP agent (Wazuh API) |
 
 ### ⚙️ Automation — `automation/`
