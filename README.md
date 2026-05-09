@@ -1,32 +1,54 @@
-# zabbix-stack
+# Zabbix-stack
 
-A collection of zabbix monitoring templates and automation scripts I develop
-and maintain. Everything Zabbix-related lives here, templates, automation workload
+A collection of Zabbix monitoring solutions to automate the boring stuff. Customized templates, bulk host management, and maintenance windows.
 
 ---
 
 ## Contents
 
-### 📊 Templates — `templates/`
+## ☰ Templates
 
-Custom monitoring templates for systems without good official coverage.
-Imported through *Configuration → Templates → Import* in the Zabbix UI.
+Monitoring templates for systems where official coverage is weak or nonexistent.
+Each template ships with discovery rules, triggers, dashboards, and macros — ready to import.
 
-| Template | Monitors | Method |
-|----------|----------|--------|
-| [proxmox-backup-server](templates/proxmox-backup-server) | PBS datastores, backup jobs, verify, GC, service health | HTTP agent (PBS API) |
-| [wazuh](templates/wazuh) | Wazuh manager, agent counts, indexer cluster health | HTTP agent (Wazuh API) |
+| Template | Monitor | How |
+|----------|----------------|-----|
+| [proxmox-backup-server](templates/proxmox-backup-server) | Datastores, backup/verify/sync/GC tasks, service health | HTTP agent >> PBS API |
+| [wazuh](templates/wazuh) soon.. | Manager status, agent counts, indexer cluster health, alert stats | HTTP agent >> Wazuh API |
 
-### ⚙️ Automation — `automation/`
+Import manual via *Configuration → Templates → Import*, or let [CI](#template-deployment--automationtemplate-deploy) do it for you.
 
-Python scripts that talk to the Zabbix API to manage things in bulk.
-Run from your laptop, a CI runner, or a cron job.
+### 🛠 Automation
 
-| Tool | Purpose |
-|------|---------|
-| [hosts](automation/hosts) | Bulk create / update / delete hosts from CSV or YAML |
-| [maintenance-periods](automation/maintenance-periods) | Create and manage maintenance windows programmatically |
-| [templates](automation/templates) | Bulk-assign or unassign templates to host groups |
+No more clicking through the Zabbix UI. Define everything in YAML, push to git, and let the pipeline handle it.
+
+```
+YAML (git) → push → GitLab CI → Zabbix API
+                        │
+                        ├── plan: dry-run (auto)
+                        └── deploy: apply (manual for prod)
+```
+
+### Hosts — `automation/hosts/`
+
+Declarative host management. YAML in, Zabbix hosts out.
+
+- One YAML file per project/environment
+- Full support: host groups, templates, tags, macros, TLS/PSK, proxy, inventory
+- **Reconciliation** — hosts removed from YAML get deleted from Zabbix. No orphans.
+
+### Maintenance — `automation/maintenance/`
+
+Maintenance windows as code. No more "who created that window and why?"
+
+- Flexible scheduling: once, daily, weekly, monthly
+- Same plan/deploy pipeline
+- **Reconciliation** — orphaned windows get cleaned up automatically
+- Manually created windows in Zabbix stay untouched
+
+### Template Deployment — `automation/template-deploy/`
+
+Push a template YAML, merge to main, CI imports it into Zabbix. Done.
 
 ---
 
@@ -35,65 +57,58 @@ Run from your laptop, a CI runner, or a cron job.
 | Component | Version |
 |-----------|---------|
 | Zabbix server | 6.0 LTS or 7.0 LTS |
-| Python (for automation) | 3.10 or newer |
-| Zabbix API token | with appropriate permissions per task |
+| GitLab CI | Docker executor |
 
----
+See each component's README for specific dependencies.
 
-## Repository layout
+## Layout
 
 ```
 zabbix-stack/
-├── README.md
-├── LICENSE
-├── CHANGELOG.md
-├── SECURITY.md
-├── .gitignore
-│
 ├── templates/
-│   ├── README.md
 │   ├── proxmox-backup-server/
+│   │   ├── README.md
+│   │   └── template.yaml
 │   └── wazuh/
+│       ├── README.md
+│       └── template.yaml
 │
 └── automation/
-    ├── README.md
-    ├── _common/                  shared API helpers
     ├── hosts/
-    ├── maintenance-periods/
-    └── templates/
+    │   ├── .gitlab-ci.yml
+    │   ├── playbooks/
+    │   │   ├── reconcile_hosts.yml
+    │   │   └── load_hosts.yml
+    │   └── hosts/
+    │       └── <project>/
+    │           ├── production.yml
+    │           └── stage.yml
+    │
+    ├── maintenance/
+    │   ├── .gitlab-ci.yml
+    │   ├── playbooks/
+    │   │   ├── reconcile_maintenance.yml
+    │   │   └── load_maintenance.yml
+    │   └── maintenance/
+    │       └── <project>/
+    │           └── production.yml
+    │
+    └── template-deploy/
+        └── .gitlab-ci.yml
 ```
 
----
-
-## Getting started
+## Quick start
 
 ```bash
 git clone https://github.com/imitik/zabbix-stack
 cd zabbix-stack
 ```
 
-Then jump into the subfolder you need:
+Each component has its own README:
 
-- **Importing a template** → see `templates/<name>/README.md`
-- **Running an automation script** → see `automation/<name>/README.md`
-
----
-
-## Contributing
-
-Issues and pull requests are welcome. When opening an issue, please include:
-
-- Zabbix server version
-- Which template or script is affected
-- Error message or unexpected behavior
-- Reproduction steps if possible
-
----
-
-## Security
-
-If you find a security issue, please **do not** open a public issue.
-See [`SECURITY.md`](SECURITY.md) for the private reporting process.
+- `templates/<name>/README.md`
+- `automation/hosts/README.md`
+- `automation/maintenance/README.md`
 
 ---
 
