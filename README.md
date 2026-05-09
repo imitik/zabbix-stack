@@ -9,24 +9,24 @@ A collection of Zabbix monitoring solutions to automate the boring stuff. Custom
 ## ☰ Templates
 
 Monitoring templates for systems where official coverage is weak or nonexistent.
-Each template ships with discovery rules, triggers, dashboards, and macros — ready to import.
+Each template ships with discovery rules, items/triggers, and macros, ready to import.
 
 | Template | Monitor | How |
 |----------|----------------|-----|
 | [proxmox-backup-server](templates/proxmox-backup-server) | Datastores, backup/verify/sync/GC tasks, service health | HTTP agent >> PBS API |
-| [wazuh](templates/wazuh) soon.. | Manager status, agent counts, indexer cluster health, alert stats | HTTP agent >> Wazuh API |
+| [wazuh](templates/wazuh) *(coming soon)* | Manager status, agent counts, indexer cluster health, alert stats | HTTP agent >> Wazuh API |
 
-Import manual via *Configuration → Templates → Import*, or let [CI](#template-deployment--automationtemplate-deploy) do it for you.
+Import manual via *Data collection → Templates → Import*, or let [CI](#template-deployment--automationtemplate-deploy) do it for you.
 
 ### 🛠 Automation
 
-No more clicking through the Zabbix UI. Define everything in YAML, push to git, and let the pipeline handle it.
+Tired of adding hosts one by one through the UI? Need to onboard 50 hosts and don't want to spend your afternoon clicking? Define everything in YAML, push to git, and let the pipeline handle it. Powered by Ansible and GitLab CI/CD.
 
 ```
 YAML (git) → push → GitLab CI → Zabbix API
                         │
-                        ├── plan: dry-run (auto)
-                        └── deploy: apply (manual for prod)
+                        ├── plan-mode: dry-run (auto)
+                        └── deploy-mode: apply (manual for production)
 ```
 
 ### Hosts — `automation/hosts/`
@@ -34,21 +34,21 @@ YAML (git) → push → GitLab CI → Zabbix API
 Declarative host management. YAML in, Zabbix hosts out.
 
 - One YAML file per project/environment
-- Full support: host groups, templates, tags, macros, TLS/PSK, proxy, inventory
-- **Reconciliation** — hosts removed from YAML get deleted from Zabbix. No orphans.
+- Full support: host groups (even if not existing), templates, tags, macros, TLS/PSK, proxy, inventory
+- **Reconciliation** — smart tag to hosts removed from YAML get deleted from Zabbix. No orphans. (without affecting the hosts added manually or not from automation tool)
 
-### Maintenance — `automation/maintenance/`
+### Maintenances — `automation/maintenances/`
 
 Maintenance windows as code. No more "who created that window and why?"
 
 - Flexible scheduling: once, daily, weekly, monthly
 - Same plan/deploy pipeline
-- **Reconciliation** — orphaned windows get cleaned up automatically
+- **Reconciliation** — orphaned windows get cleaned up automatically (without affecting the maintenance added manually or not from automation tool)
 - Manually created windows in Zabbix stay untouched
 
-### Template Deployment — `automation/template-deploy/`
+### Templates — `automation/templates/`
 
-Push a template YAML, merge to main, CI imports it into Zabbix. Done.
+Push a template YAML, merge to main, CI imports it into Zabbix. (always update keep only needed to template and update them since that's not covered by zabbix)
 
 ---
 
@@ -56,8 +56,8 @@ Push a template YAML, merge to main, CI imports it into Zabbix. Done.
 
 | Component | Version |
 |-----------|---------|
-| Zabbix server | 6.0 LTS or 7.0 LTS |
-| GitLab CI | Docker executor |
+| Zabbix server | > 7.0 LTS |
+| GitLab CI | Runner Docker executor |
 
 See each component's README for specific dependencies.
 
@@ -84,7 +84,7 @@ zabbix-stack/
     │           ├── production.yml
     │           └── stage.yml
     │
-    ├── maintenance/
+    ├── maintenances/
     │   ├── .gitlab-ci.yml
     │   ├── playbooks/
     │   │   ├── reconcile_maintenance.yml
@@ -93,7 +93,7 @@ zabbix-stack/
     │       └── <project>/
     │           └── production.yml
     │
-    └── template-deploy/
+    └── templates/
         └── .gitlab-ci.yml
 ```
 
