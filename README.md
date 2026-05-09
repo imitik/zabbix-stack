@@ -87,11 +87,7 @@ git clone https://github.com/imitik/zabbix-stack
 cd zabbix-stack
 ```
 
-Each component has its own README:
-
-- `templates/<name>/README.md`
-- `automation/hosts/README.md`
-- `automation/maintenance/README.md`
+*Each component has its own README*
 
 ---
 
