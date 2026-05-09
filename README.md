@@ -29,7 +29,7 @@ YAML (git) → push → GitLab CI → Zabbix API
                         └── deploy-mode: apply (manual for production)
 ```
 
-### Hosts — `automation/hosts/`
+### Hosts
 
 Declarative host management. YAML in, Zabbix hosts out.
 
@@ -37,7 +37,7 @@ Declarative host management. YAML in, Zabbix hosts out.
 - Full support: host groups (even if not existing), templates, tags, macros, TLS/PSK, proxy, inventory
 - **Reconciliation** — smart tag to hosts removed from YAML get deleted from Zabbix. No orphans. (without affecting the hosts added manually or not from automation tool)
 
-### Maintenances — `automation/maintenances/`
+### Maintenances
 
 Maintenance windows as code. No more "who created that window and why?"
 
@@ -46,9 +46,13 @@ Maintenance windows as code. No more "who created that window and why?"
 - **Reconciliation** — orphaned windows get cleaned up automatically (without affecting the maintenance added manually or not from automation tool)
 - Manually created windows in Zabbix stay untouched
 
-### Templates — `automation/templates/`
+### Templates
 
-Push a template YAML, merge to main, CI imports it into Zabbix. (always update keep only needed to template and update them since that's not covered by zabbix)
+Push a template YAML, merge to main, CI imports it into Zabbix.
+
+- Auto-detects new, updated, and deleted templates per commit
+- Creates missing host groups referenced in templates
+- Deleted template files get pruned from Zabbix automatically
 
 ---
 
@@ -58,6 +62,7 @@ Push a template YAML, merge to main, CI imports it into Zabbix. (always update k
 |-----------|---------|
 | Zabbix server | > 7.0 LTS |
 | GitLab CI | Runner Docker executor |
+| GitHub Actions | *(coming soon)* |
 
 See each component's README for specific dependencies.
 
@@ -67,34 +72,12 @@ See each component's README for specific dependencies.
 zabbix-stack/
 ├── templates/
 │   ├── proxmox-backup-server/
-│   │   ├── README.md
-│   │   └── template.yaml
 │   └── wazuh/
-│       ├── README.md
-│       └── template.yaml
 │
 └── automation/
     ├── hosts/
-    │   ├── .gitlab-ci.yml
-    │   ├── playbooks/
-    │   │   ├── reconcile_hosts.yml
-    │   │   └── load_hosts.yml
-    │   └── hosts/
-    │       └── <project>/
-    │           ├── production.yml
-    │           └── stage.yml
-    │
     ├── maintenances/
-    │   ├── .gitlab-ci.yml
-    │   ├── playbooks/
-    │   │   ├── reconcile_maintenance.yml
-    │   │   └── load_maintenance.yml
-    │   └── maintenance/
-    │       └── <project>/
-    │           └── production.yml
-    │
     └── templates/
-        └── .gitlab-ci.yml
 ```
 
 ## Quick start
