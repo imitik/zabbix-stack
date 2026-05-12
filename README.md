@@ -4,9 +4,6 @@
 
 A collection of Zabbix monitoring solutions to automate the boring stuff. Customized templates, bulk host management, and maintenance windows.
 
----
-
-## Contents
 
 ## ☰ Templates
 
@@ -22,7 +19,7 @@ Import manual via *Data collection → Templates → Import*, or let [CI](#templ
 
 ### 🛠 Automation
 
-Tired of adding hosts one by one through the UI? Need to onboard 50 hosts and don't want to spend your afternoon clicking? Define everything in YAML, push to git, and let the pipeline handle it. Powered by Ansible and GitLab CI/CD.
+Tired of adding hosts one by one through the UI? Need to onboard hundred hosts and don't want to spend your afternoon clicking? Define everything in YAML, push to git, and let the pipeline handle it. Powered by Ansible and GitLab CI/CD.
 
 ```
 YAML (git) → push → GitLab CI → Zabbix API
@@ -37,7 +34,7 @@ Declarative host management
 
 - One YAML file per project/environment
 - Full support: host groups (even if not existing), templates, tags, macros, TLS/PSK, proxy, inventory
-- **Reconciliation** smart tag to identify removed hosts from YAML get deleted from Zabbix. No orphans. (without affecting the hosts added manually or not from automation tool)
+- **Reconciliation** smart tag to identify removed hosts from YAML get deleted from Zabbix. (without affecting the hosts added manually or not from automation tool)
 
 ### Maintenances
 
@@ -45,7 +42,7 @@ Maintenance windows as code. No more "who created that window and why?"
 
 - Flexible scheduling: once, daily, weekly, monthly
 - Same plan/deploy pipeline
-- **Reconciliation** — orphaned windows get cleaned up automatically (without affecting the maintenance added manually or not from automation tool)
+- **Reconciliation** orphaned windows get cleaned up automatically
 - Manually created windows in Zabbix stay untouched
 
 ### Templates
