@@ -1,5 +1,7 @@
 # Zabbix-stack
 
+**🚧 Locked for now, until release**
+
 A collection of Zabbix monitoring solutions to automate the boring stuff. Customized templates, bulk host management, and maintenance windows.
 
 ---
@@ -13,7 +15,7 @@ Each template ships with discovery rules, items/triggers, and macros, ready to i
 
 | Template | Monitor | How |
 |----------|----------------|-----|
-| [proxmox-backup-server](templates/proxmox-backup-server) | Datastores, backup/verify/sync/GC tasks, service health | HTTP agent >> PBS API |
+| [proxmox-backup-server](templates/proxmox-backup-server) *(coming soon)* | Datastores, backup/verify/sync/GC tasks, service health | HTTP agent >> PBS API |
 | [wazuh](templates/wazuh) *(coming soon)* | Manager status, agent counts, indexer cluster health, alert stats | HTTP agent >> Wazuh API |
 
 Import manual via *Data collection → Templates → Import*, or let [CI](#template-deployment--automationtemplate-deploy) do it for you.
@@ -31,11 +33,11 @@ YAML (git) → push → GitLab CI → Zabbix API
 
 ### Hosts
 
-Declarative host management. YAML in, Zabbix hosts out.
+Declarative host management
 
 - One YAML file per project/environment
 - Full support: host groups (even if not existing), templates, tags, macros, TLS/PSK, proxy, inventory
-- **Reconciliation** — smart tag to hosts removed from YAML get deleted from Zabbix. No orphans. (without affecting the hosts added manually or not from automation tool)
+- **Reconciliation** smart tag to identify removed hosts from YAML get deleted from Zabbix. No orphans. (without affecting the hosts added manually or not from automation tool)
 
 ### Maintenances
 
@@ -58,13 +60,11 @@ Push a template YAML, merge to main, CI imports it into Zabbix.
 
 ## Requirements
 
-| Component | Version |
-|-----------|---------|
-| Zabbix server | > 7.0 LTS |
-| GitLab CI | Runner Docker executor |
-| GitHub Actions | *(coming soon)* |
+- Zabbix server **≥ 7.0 LTS**
+- A Zabbix API token (component-specific scopes)
+- GitLab CI runner with Docker executor
 
-See each component's README for specific dependencies.
+GitHub Actions support is comming
 
 ## Layout
 
