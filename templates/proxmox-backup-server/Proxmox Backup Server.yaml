@@ -1,0 +1,234 @@
+zabbix_export: #Authored by Imitik
+  version: '7.4'
+  template_groups:
+    - uuid: ce251650afbd40dbb4f675cb670471ab
+      name: Templates/Virtualization
+  templates:
+    - uuid: 5b05034b14044956820d1f6af3168c60
+      template: 'Proxmox Backup Server by HTTP'
+      name: 'Proxmox Backup Server by HTTP'
+      description: 'Proxmox Backup Server mon that tracks backup/verify state independently for each VM/CT'
+      groups:
+        - name: Templates/Virtualization
+      items:
+        - uuid: e8a70cd8d7784392b52da6b9b5177b96
+          name: 'PBS: Get backups'
+          type: HTTP_AGENT
+          key: pbs.backups.error
+          delay: 5m
+          history: '0'
+          value_type: TEXT
+          preprocessing:
+            - type: CHECK_NOT_SUPPORTED
+              parameters:
+                - '-1'
+              error_handler: CUSTOM_VALUE
+              error_handler_params: 'Error getting data'
+            - type: JSONPATH
+              parameters:
+                - $.body.data
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  // Keep only tasks that occurred within the last {$PBS.BACKUPS.TIME} days
+                  var maxAgeSeconds = {$PBS.BACKUPS.TIME} * 86400;
+                  var cutoff        = Math.floor(Date.now() / 1000) - maxAgeSeconds;
+                  
+                  var tasks = JSON.parse(value);
+                  if (!Array.isArray(tasks)) {
+                      return "[]";
+                  }
+                  
+                  return JSON.stringify(
+                      tasks.filter(function (t) { return t.starttime > cutoff; })
+                  );
+          timeout: 30s
+          url: 'https://{$PBS.HOST}:{$PBS.PORT}/api2/json/nodes/0/tasks'
+          query_fields:
+            - name: running
+              value: 'false'
+            - name: typefilter
+              value: backup
+          headers:
+            - name: Authorization
+              value: 'PBSAPIToken={$PBS.TOKEN.ID}:{$PBS.TOKEN.SECRET}'
+          output_format: JSON
+        - uuid: 1a97c5b973a04dd4bf56a5c276e4d458
+          name: 'PBS: Get snapshots'
+          type: HTTP_AGENT
+          key: pbs.snapshots.error
+          delay: 5m
+          history: '0'
+          value_type: TEXT
+          preprocessing:
+            - type: CHECK_NOT_SUPPORTED
+              parameters:
+                - '-1'
+              error_handler: CUSTOM_VALUE
+              error_handler_params: 'Error getting data'
+            - type: JSONPATH
+              parameters:
+                - $.body.data
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  // Keep snapshots that occurred within the last {$PBS.SNAPSHOTS.TIME} days
+                  var maxAgeSeconds = {$PBS.SNAPSHOTS.TIME} * 86400;
+                  var cutoff        = Math.floor(Date.now() / 1000) - maxAgeSeconds;
+                  
+                  var snaps = JSON.parse(value);
+                  if (!Array.isArray(snaps)) {
+                      return "[]";
+                  }
+                  
+                  return JSON.stringify(
+                      snaps.filter(function (s) { return s["backup-time"] > cutoff; })
+                  );
+          timeout: 30s
+          url: 'https://{$PBS.HOST}:{$PBS.PORT}/api2/json/admin/datastore/{$PBS.DATASTORE}/snapshots'
+          headers:
+            - name: Authorization
+              value: 'PBSAPIToken={$PBS.TOKEN.ID}:{$PBS.TOKEN.SECRET}'
+          output_format: JSON
+      discovery_rules:
+        - uuid: 65c5bd4b2b904766a34e872b188dc355
+          name: 'PBS: VMs discovery'
+          type: HTTP_AGENT
+          key: pbs.data.vms
+          delay: 1h
+          item_prototypes:
+            - uuid: b879e46bd8f64b8e9490ddf2b8c43cca
+              name: 'PBS: Status backup for {#BACKUP_TYPE}/{#BACKUP_ID}'
+              type: DEPENDENT
+              key: 'pbs.backup.error[{#BACKUP_TYPE},{#BACKUP_ID}]'
+              value_type: TEXT
+              preprocessing:
+                - type: JAVASCRIPT
+                  parameters:
+                    - |
+                      var tasks  = JSON.parse(value);
+                      var needle = ":{#BACKUP_TYPE}/{#BACKUP_ID}";
+                      
+                      var vmTasks = tasks.filter(function (t) {
+                          return t.worker_id && t.worker_id.indexOf(needle) !== -1;
+                      });
+                      
+                      if (vmTasks.length === 0) {
+                          return JSON.stringify({ status: "NO RECENT BACKUP", endtime: 0 });
+                      }
+                      
+                      var latest = vmTasks.reduce(function (a, b) {
+                          return (a.endtime > b.endtime) ? a : b;
+                      });
+                      
+                      return JSON.stringify(latest);
+                - type: JAVASCRIPT
+                  parameters:
+                    - |
+                      var t = JSON.parse(value);
+                      
+                      if (t.status === "OK") return "OK";
+                      if (!t.endtime)       return "NO RECENT BACKUP";
+                      
+                      var d = new Date(t.endtime * 1000)
+                          .toISOString().replace("T", " ").substring(0, 19);
+                      
+                      return d + " >> " + t.status;
+              master_item:
+                key: pbs.backups.error
+              trigger_prototypes:
+                - uuid: fd72c48c3de442b0952b2c9fc1403a3f
+                  expression: 'last(/Proxmox Backup Server by HTTP/pbs.backup.error[{#BACKUP_TYPE},{#BACKUP_ID}])<>"OK"'
+                  name: 'PBS: Failed backup for {#BACKUP_TYPE}/{#BACKUP_ID}'
+                  priority: HIGH
+            - uuid: 56137f6d38f940c58cb77a455caca63e
+              name: 'PBS: Verify state for {#BACKUP_TYPE}/{#BACKUP_ID}'
+              type: DEPENDENT
+              key: 'pbs.verify.state[{#BACKUP_TYPE},{#BACKUP_ID}]'
+              value_type: TEXT
+              preprocessing:
+                - type: JAVASCRIPT
+                  parameters:
+                    - |
+                      var snaps = JSON.parse(value);
+                      
+                      var vmSnaps = snaps.filter(function (s) {
+                          return s["backup-type"] === "{#BACKUP_TYPE}" &&
+                                 s["backup-id"]   === "{#BACKUP_ID}";
+                      });
+                      
+                      if (vmSnaps.length === 0) {
+                          return JSON.stringify({ state: "NO SNAPSHOT", time: 0 });
+                      }
+                      
+                      var latest = vmSnaps.reduce(function (a, b) {
+                          return (a["backup-time"] > b["backup-time"]) ? a : b;
+                      });
+                      
+                      var v = latest.verification || {};
+                      return JSON.stringify({
+                          state: v.state || "not-verified",
+                          time:  v.time  || latest["backup-time"] || 0
+                      });
+                - type: JAVASCRIPT
+                  parameters:
+                    - |
+                      var v = JSON.parse(value);
+                      
+                      if (v.state === "NO SNAPSHOT")    return "NO SNAPSHOT";
+                      if (v.state === "ok")             return "OK";
+                      if (v.state === "not-verified")   return "OK";
+                      if (v.state === "queued")         return "OK";
+                      
+                      // "failed" or anything else falls through
+                      if (!v.time || v.time === 0) {
+                          return "verification " + v.state;
+                      }
+                      
+                      var d = new Date(v.time * 1000)
+                          .toISOString().replace("T", " ").substring(0, 19);
+                      
+                      return d + "  >>  verification " + v.state;
+              master_item:
+                key: pbs.snapshots.error
+              trigger_prototypes:
+                - uuid: 7553987505e648e48182538e4e9828a0
+                  expression: 'last(/Proxmox Backup Server by HTTP/pbs.verify.state[{#BACKUP_TYPE},{#BACKUP_ID}])<>"OK"'
+                  name: 'PBS: Verify failed for {#BACKUP_TYPE}/{#BACKUP_ID}'
+                  opdata: '{ITEM.LASTVALUE}'
+                  priority: HIGH
+          url: 'https://{$PBS.HOST}:{$PBS.PORT}/api2/json/admin/datastore/{$PBS.DATASTORE}/groups'
+          headers:
+            - name: Authorization
+              value: 'PBSAPIToken={$PBS.TOKEN.ID}:{$PBS.TOKEN.SECRET}'
+          lld_macro_paths:
+            - lld_macro: '{#BACKUP_ID}'
+              path: '$.[''backup-id'']'
+            - lld_macro: '{#BACKUP_TYPE}'
+              path: '$.[''backup-type'']'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.data
+      macros:
+        - macro: '{$PBS.BACKUPS.TIME}'
+          value: '1'
+          description: 'Time range need to consider of the latest backups in days'
+        - macro: '{$PBS.DATASTORE}'
+          value: datastore
+          description: 'Datastore Name'
+        - macro: '{$PBS.HOST}'
+          value: '<FQDN/HOSTNAME>'
+          description: 'Hostname or FQDN of proxmox without http protocol'
+        - macro: '{$PBS.PORT}'
+          value: '8007'
+          description: '8007 Default port or 80/443'
+        - macro: '{$PBS.SNAPSHOTS.TIME}'
+          value: '7'
+          description: 'Time range need to consider of the latest snapshots in days'
+        - macro: '{$PBS.TOKEN.ID}'
+          value: user@realm!tokenid
+          description: 'API token'
+        - macro: '{$PBS.TOKEN.SECRET}'
+          value: '------------SECRET-HERE------------'
+          description: 'Secret token'
