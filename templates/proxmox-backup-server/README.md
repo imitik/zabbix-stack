@@ -47,9 +47,13 @@ Required permissions on `/`: `*.Audit`
 The template uses two master HTTP items that fan out to per machine dependent items via low-level discovery:
 
 ```
-PBS: Get backups   ─┐
-                    ├─→ PBS: VMs discovery ─→ per machine itemprototypes + triggerprototypes
-PBS: Get snapshots ─┘
+   ┌──────────────────────┐
+   │ PBS: Get backups     │──┐
+   └──────────────────────┘  │
+                             ├──▶ PBS: VMs discovery (LLD) ──▶ per machine itemprototype + triggerprototype
+   ┌──────────────────────┐  │
+   │ PBS: Get snapshots   │──┘
+   └──────────────────────┘
 ```
 
 - **`pbs.backup.error[type,id]`** >> latest backup task status per VM. Alerts if not `OK`.
@@ -69,4 +73,4 @@ Recovery is automatic on the next master poll (default 5 min) once a successful 
 
 ## License
 
-MIT - see [`LICENSE`](LICENSE)
+MIT - see [`LICENSE`](../../LICENSE)

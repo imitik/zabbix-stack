@@ -90,4 +90,4 @@ cd zabbix-stack
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+MIT - see [`LICENSE`](LICENSE).
