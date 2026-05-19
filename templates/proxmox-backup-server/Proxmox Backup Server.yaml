@@ -1,4 +1,4 @@
-zabbix_export: #Authored by Imitik
+zabbix_export:
   version: '7.4'
   template_groups:
     - uuid: ce251650afbd40dbb4f675cb670471ab
@@ -7,7 +7,7 @@ zabbix_export: #Authored by Imitik
     - uuid: 5b05034b14044956820d1f6af3168c60
       template: 'Proxmox Backup Server by HTTP'
       name: 'Proxmox Backup Server by HTTP'
-      description: 'Proxmox Backup Server mon that tracks backup/verify state independently for each VM/CT'
+      description: 'Proxmox Backup Server monitoring that tracks backup/verify state independently for each VM/CT'
       groups:
         - name: Templates/Virtualization
       items:
@@ -15,7 +15,7 @@ zabbix_export: #Authored by Imitik
           name: 'PBS: Get backups'
           type: HTTP_AGENT
           key: pbs.backups.error
-          delay: 5m
+          delay: 30m
           history: '0'
           value_type: TEXT
           preprocessing:
@@ -53,11 +53,142 @@ zabbix_export: #Authored by Imitik
             - name: Authorization
               value: 'PBSAPIToken={$PBS.TOKEN.ID}:{$PBS.TOKEN.SECRET}'
           output_format: JSON
+        - uuid: 990b6bd215dc4250869133570db383e7
+          name: 'PBS: GC status'
+          type: DEPENDENT
+          key: pbs.gc.status
+          value_type: TEXT
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var tasks = JSON.parse(value);
+                  
+                  var gcTasks = tasks.filter(function (t) {
+                      return t.worker_type === "garbage_collection" &&
+                             t.worker_id   === "{$PBS.DATASTORE}";
+                  });
+                  
+                  if (gcTasks.length === 0) {
+                      return JSON.stringify({ status: "NO RECENT GC", endtime: 0 });
+                  }
+                  
+                  return JSON.stringify(
+                      gcTasks.reduce(function (a, b) {
+                          return (a.endtime > b.endtime) ? a : b;
+                      })
+                  );
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var t = JSON.parse(value);
+                  
+                  if (t.status === "OK") return "OK";
+                  if (!t.endtime)        return "NO RECENT GC";
+                  
+                  var d = new Date(t.endtime * 1000)
+                      .toISOString().replace("T", " ").substring(0, 19);
+                  
+                  return d + " >> " + t.status;
+          master_item:
+            key: pbs.jobs.tasks
+          triggers:
+            - uuid: 2c59c13673744871ac07b4ca4ccae744
+              expression: 'last(/Proxmox Backup Server by HTTP/pbs.gc.status)<>"OK"'
+              name: 'PBS: Garbage collection failed on {$PBS.DATASTORE}'
+              opdata: '{ITEM.LASTVALUE}'
+              priority: HIGH
+        - uuid: b33db37be37e43a7ace3ae1fd69a5e72
+          name: 'PBS: Get jobs tasks'
+          type: HTTP_AGENT
+          key: pbs.jobs.tasks
+          delay: 30m
+          history: '0'
+          value_type: TEXT
+          preprocessing:
+            - type: CHECK_NOT_SUPPORTED
+              parameters:
+                - '-1'
+              error_handler: CUSTOM_VALUE
+              error_handler_params: 'Error getting data'
+            - type: JSONPATH
+              parameters:
+                - $.body.data
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  // Keep job tasks within the last {$PBS.JOBS.TIME} days
+                  var maxAgeSeconds = {$PBS.JOBS.TIME} * 86400;
+                  var cutoff        = Math.floor(Date.now() / 1000) - maxAgeSeconds;
+                  
+                  var tasks = JSON.parse(value);
+                  if (!Array.isArray(tasks)) {
+                      return "[]";
+                  }
+                  
+                  return JSON.stringify(
+                      tasks.filter(function (t) { return t.starttime > cutoff; })
+                  );
+          timeout: 30s
+          url: 'https://{$PBS.HOST}:{$PBS.PORT}/api2/json/nodes/0/tasks'
+          query_fields:
+            - name: running
+              value: 'false'
+          headers:
+            - name: Authorization
+              value: 'PBSAPIToken={$PBS.TOKEN.ID}:{$PBS.TOKEN.SECRET}'
+          output_format: JSON
+        - uuid: cec10533d7674b12aa3a764a81dc321f
+          name: 'PBS: Prune status'
+          type: DEPENDENT
+          key: pbs.prune.status
+          value_type: TEXT
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var tasks = JSON.parse(value);
+                  var ds    = "{$PBS.DATASTORE}";
+                  
+                  var pruneTasks = tasks.filter(function (t) {
+                      return t.worker_type === "prunejob" &&
+                             t.worker_id   === ds;
+                  });
+                  
+                  if (pruneTasks.length === 0) {
+                      return JSON.stringify({ status: "NO RECENT PRUNE", endtime: 0 });
+                  }
+                  
+                  return JSON.stringify(
+                      pruneTasks.reduce(function (a, b) {
+                          return (a.endtime > b.endtime) ? a : b;
+                      })
+                  );
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var t = JSON.parse(value);
+                  
+                  if (t.status === "OK") return "OK";
+                  if (!t.endtime)        return "NO RECENT PRUNE";
+                  
+                  var d = new Date(t.endtime * 1000)
+                      .toISOString().replace("T", " ").substring(0, 19);
+                  
+                  return d + " >> " + t.status;
+          master_item:
+            key: pbs.jobs.tasks
+          triggers:
+            - uuid: 1e3e1e2c6fa241a9baf108cbe0cbb2e8
+              expression: 'last(/Proxmox Backup Server by HTTP/pbs.prune.status)<>"OK"'
+              name: 'PBS: Prune failed on {$PBS.DATASTORE}'
+              opdata: '{ITEM.LASTVALUE}'
+              priority: HIGH
         - uuid: 1a97c5b973a04dd4bf56a5c276e4d458
           name: 'PBS: Get snapshots'
           type: HTTP_AGENT
           key: pbs.snapshots.error
-          delay: 5m
+          delay: 30m
           history: '0'
           value_type: TEXT
           preprocessing:
@@ -90,6 +221,50 @@ zabbix_export: #Authored by Imitik
             - name: Authorization
               value: 'PBSAPIToken={$PBS.TOKEN.ID}:{$PBS.TOKEN.SECRET}'
           output_format: JSON
+        - uuid: 8536867d8d244473850c239f5fd2ee10
+          name: 'PBS: Sync status'
+          type: DEPENDENT
+          key: pbs.sync.status
+          value_type: TEXT
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var tasks = JSON.parse(value);
+                  
+                  var syncTasks = tasks.filter(function (t) {
+                      return t.worker_type === "sync";
+                  });
+                  
+                  if (syncTasks.length === 0) {
+                      return JSON.stringify({ status: "NO RECENT SYNC", endtime: 0 });
+                  }
+                  
+                  return JSON.stringify(
+                      syncTasks.reduce(function (a, b) {
+                          return (a.endtime > b.endtime) ? a : b;
+                      })
+                  );
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var t = JSON.parse(value);
+                  
+                  if (t.status === "OK") return "OK";
+                  if (!t.endtime)        return "NO RECENT SYNC";
+                  
+                  var d = new Date(t.endtime * 1000)
+                      .toISOString().replace("T", " ").substring(0, 19);
+                  
+                  return d + " >> " + t.status;
+          master_item:
+            key: pbs.jobs.tasks
+          triggers:
+            - uuid: 93c008b85a0e49fcba85f9bde820f47e
+              expression: 'last(/Proxmox Backup Server by HTTP/pbs.sync.status)<>"OK"'
+              name: 'PBS: Sync failed on {$PBS.DATASTORE}'
+              opdata: '{ITEM.LASTVALUE}'
+              priority: HIGH
       discovery_rules:
         - uuid: 65c5bd4b2b904766a34e872b188dc355
           name: 'PBS: VMs discovery'
@@ -140,6 +315,7 @@ zabbix_export: #Authored by Imitik
                 - uuid: fd72c48c3de442b0952b2c9fc1403a3f
                   expression: 'last(/Proxmox Backup Server by HTTP/pbs.backup.error[{#BACKUP_TYPE},{#BACKUP_ID}])<>"OK"'
                   name: 'PBS: Failed backup for {#BACKUP_TYPE}/{#BACKUP_ID}'
+                  opdata: '{ITEM.LASTVALUE}'
                   priority: HIGH
             - uuid: 56137f6d38f940c58cb77a455caca63e
               name: 'PBS: Verify state for {#BACKUP_TYPE}/{#BACKUP_ID}'
@@ -212,7 +388,7 @@ zabbix_export: #Authored by Imitik
                 - $.data
       macros:
         - macro: '{$PBS.BACKUPS.TIME}'
-          value: '1'
+          value: '2'
           description: 'Time range need to consider of the latest backups in days'
         - macro: '{$PBS.DATASTORE}'
           value: datastore
@@ -220,11 +396,14 @@ zabbix_export: #Authored by Imitik
         - macro: '{$PBS.HOST}'
           value: '<FQDN/HOSTNAME>'
           description: 'Hostname or FQDN of proxmox without http protocol'
+        - macro: '{$PBS.JOBS.TIME}'
+          value: '7'
+          description: 'Lookback window for GC, prune, and sync tasks (days)'
         - macro: '{$PBS.PORT}'
           value: '8007'
           description: '8007 Default port or 80/443'
         - macro: '{$PBS.SNAPSHOTS.TIME}'
-          value: '7'
+          value: '2'
           description: 'Time range need to consider of the latest snapshots in days'
         - macro: '{$PBS.TOKEN.ID}'
           value: user@realm!tokenid
